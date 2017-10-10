@@ -9,6 +9,7 @@ API_URL = 'https://api.vk.com/method/'
 TOKEN = '5dfd6b0dee902310df772082421968f4c06443abecbc082a8440cb18910a56daca73ac8d04b25154a1128'
 MAX_FRIEND_IN_GROUP = 3
 
+
 class DeletedUser(Exception):
     pass
 
@@ -34,24 +35,31 @@ class VkApp(cli.Application):
             time.sleep(left_to_wait)
         self.last_called = time.time()
         params['access_token'] = TOKEN
-        r = requests.get(API_URL + api_method, params=params).json()
-        sys.stdout.write('.')
-        sys.stdout.flush()
-        if 'error' in r:
-            if r['error']['error_code'] == 18:
-                raise DeletedUser()
-            elif r['error']['error_code'] == 15:
-                raise AccesDenied()
-            elif r['error']['error_code'] == 10:
-                raise UnknownError()
+        ready = False
+        while not ready:
+            r = requests.get(API_URL + api_method, params=params).json()
+            sys.stdout.write('.')
+            sys.stdout.flush()
+            if 'error' in r:
+                if r['error']['error_code'] == 18:
+                    raise DeletedUser()
+                elif r['error']['error_code'] == 15:
+                    raise AccesDenied()
+                elif r['error']['error_code'] == 10:
+                    raise UnknownError()
+                elif r['error']['error_code'] == 6:
+                    time.sleep(0.5)
+                    continue
+                else:
+                    print(r)
+                    raise Exception
             else:
-                print(r)
-                raise Exception
+                ready = True
         try:
             res = r['response']
         except KeyError:
             print(r)
-            raise Exception
+            raise
         return res
 
     def get_friends(self, user_id):
@@ -74,11 +82,14 @@ class VkApp(cli.Application):
         return True if res == 1 else False
 
     def get_members(self, group_id):
-        try:
-            r = self.call_method('groups.getMembers', params={'group_id': group_id})
-            res = r['users']
-        except (AccesDenied, UnknownError):
-            res = []
+        res = []
+        offset = 0
+        members_count = self.get_members_count(group_id=group_id)
+        while offset < members_count:
+            r = self.call_method('groups.getMembers', params={'group_id': group_id,
+                                                              'offset': offset})
+            res += r['users']
+            offset += 1000
         return res
 
     def get_members_count(self, group_id):
@@ -86,7 +97,7 @@ class VkApp(cli.Application):
             r = self.call_method('groups.getMembers', params={'group_id': group_id})
             res = r['count']
         except (AccesDenied, UnknownError):
-            res = []
+            res = 0
         return res
 
     def get_group_info(self, group_id):
