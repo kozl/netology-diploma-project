@@ -29,14 +29,14 @@ class VkApp(cli.Application):
         self.last_called = 0
 
     def call_method(self, api_method, params={}, frequency=2.9):
-        elapsed = time.time() - self.last_called
-        left_to_wait = 1.0/frequency - elapsed
-        if left_to_wait > 0:
-            time.sleep(left_to_wait)
-        self.last_called = time.time()
         params['access_token'] = TOKEN
         ready = False
         while not ready:
+            elapsed = time.time() - self.last_called
+            left_to_wait = 1.0/frequency - elapsed
+            if left_to_wait > 0:
+                time.sleep(left_to_wait)
+            self.last_called = time.time()
             r = requests.get(API_URL + api_method, params=params).json()
             sys.stdout.write('.')
             sys.stdout.flush()
